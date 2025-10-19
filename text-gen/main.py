@@ -29,6 +29,9 @@ def generate_text():
         # Extract the response text correctly
         print(text_response.choices[0].message.content)
     print(f"The generated response: {text_response}")
+    print(f"The response: {text_response.output_text}")
+
+    print(f"Text generation completed: {text_response.choices[0].message.content}")
 
 
 if __name__ == "__main__":
