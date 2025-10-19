@@ -1,38 +1,71 @@
 import os
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Initialize FastAPI app
+app = FastAPI(title="OpenAI Text Generation API", version="1.0.0")
 
-def generate_text():
-    # Get API key from environment variable
-    api_key = os.getenv("OPENAI_API_KEY")
+# Initialize OpenAI client
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("OPENAI_API_KEY environment variable not set")
 
-    if not api_key:
-        print("Error: OPENAI_API_KEY environment variable not set")
-        print("Please set your API key in the .env file or as an environment variable")
-        return
+client = OpenAI(api_key=api_key)
 
-    client = OpenAI(api_key=api_key)
-    text_response = None
+
+# Pydantic models for request/response
+class TextGenerationRequest(BaseModel):
+    prompt: str
+    model: str = "gpt-3.5-turbo"
+    max_tokens: int = 150
+
+
+class TextGenerationResponse(BaseModel):
+    generated_text: str
+    model_used: str
+    prompt: str
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"message": "OpenAI Text Generation API is running!"}
+
+
+@app.post("/generate", response_model=TextGenerationResponse)
+async def generate_text(request: TextGenerationRequest):
+    """Generate text using OpenAI API"""
     try:
-        # Fixed API call - using chat completions instead of responses
-        text_response = client.chat.completions.create(
-            model="gpt-3.5-turbo",  # Use a valid model
-            messages=[{"role": "user", "content": "What is the capital of India?"}],
+        response = client.chat.completions.create(
+            model=request.model,
+            messages=[{"role": "user", "content": request.prompt}],
+            max_tokens=request.max_tokens,
         )
-    except Exception as e:
-        print(f"Error occurred: {e}")
-    else:
-        # Extract the response text correctly
-        print(text_response.choices[0].message.content)
-    print(f"The generated response: {text_response}")
-    print(f"The response: {text_response.output_text}")
 
-    print(f"Text generation completed: {text_response.choices[0].message.content}")
+        generated_text = response.choices[0].message.content
+
+        return TextGenerationResponse(
+            generated_text=generated_text,
+            model_used=request.model,
+            prompt=request.prompt,
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating text: {str(e)}")
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "OpenAI Text Generation API"}
 
 
 if __name__ == "__main__":
-    generate_text()
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
